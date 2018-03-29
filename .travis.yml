@@ -95,10 +95,3 @@ script:
   - exit $exit_code
 
 notifications:
-  webhooks: https://galaxy.ansible.com/api/v1/notifications/
-  email:
-    - yuwzho@microsoft.com
-    - zikalino@microsoft.com
-    - yungez@microsoft.com
-    - yaweiw@microsoft.com
-
