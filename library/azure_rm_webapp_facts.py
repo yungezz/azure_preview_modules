@@ -109,7 +109,7 @@ from ansible.module_utils.azure_rm_common import AzureRMModuleBase
 
 AZURE_OBJECT_CLASS = 'WebApp'
 
-info_level_spec=(
+info_level_spec = dict(
     level=dict(
         type='str',
         choices=[
@@ -148,7 +148,7 @@ class AzureRMWebAppFacts(AzureRMModuleBase):
 
         self.results = dict(
             changed=False,
-            ansible_facts=None
+            ansible_facts=dict(azure_webapps=[])
         )
 
         self.name = None
@@ -174,11 +174,12 @@ class AzureRMWebAppFacts(AzureRMModuleBase):
         if self.name:
             self.results['ansible_facts']['azure_webapps'] = self.list_by_name()
 
-            for level in self.info_level:
-                if level["level"] == "configuration":
-                    self.results['ansible_facts']['azure_webapps']['site_config'] = self.list_webapp_configuration()
-                if level["level"] == "app_settings":
-                    self.results['ansible_facts']['azure_webapps']['app_settings'] = self.list_webapp_appsettings()
+            if self.info_level:
+                for level in self.info_level:
+                    if level["level"] == "configuration":
+                        self.results['ansible_facts']['azure_webapps'][0]['site_config'] = self.list_webapp_configuration()
+                    if level["level"] == "app_settings":
+                        self.results['ansible_facts']['azure_webapps'][0]['app_settings'] = self.list_webapp_appsettings()
 
         elif self.resource_group:
             self.results['ansible_facts']['azure_webapps'] = self.list_by_resource_group()        
@@ -206,7 +207,7 @@ class AzureRMWebAppFacts(AzureRMModuleBase):
     def list_by_resource_group(self):
         self.log('List web apps in resource groups {0}'.format(self.resource_group))
         try:
-            response = self.web_client.web_apps.list_by_resource_group(self.resource_group)
+            response = list(self.web_client.web_apps.list_by_resource_group(self.resource_group))
         except CloudError as exc:
             self.fail("Error listing web apps in resource groups {0} - {1}".format(self.resource_group, str(exc)))
 
