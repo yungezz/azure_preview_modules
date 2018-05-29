@@ -545,25 +545,25 @@ class AzureRMWebApps(AzureRMModuleBase):
         response = None
         to_be_updated = False
 
-        if self.windows_framework is not None:
-            if self.windows_framework.get('java_version', None) is not None and len(self.windows_framework) > 1:
+        if self.windows_framework:
+            if self.windows_framework.get('java_version') and len(self.windows_framework) > 1:
                 self.fail('java_version is mutually exclusive with other framework version in windows_framework.')
             for key in list(self.windows_framework.keys()):
                 self.site_config[key] = self.windows_framework[key]
 
-        if self.app_settings is None:
+        if not self.app_settings:
             self.app_settings = dict()
 
         if self.plan:
             self.plan = self.parse_resource_to_dict(self.plan)
 
-        if self.container_settings is not None:
-            if hasattr(self.site_config, 'linux_fx_version'):
+        if self.container_settings:
+            if self.site_config.get('linux_fx_version'):
                 self.fail("Cannot set linux_framework with container_settings at same time.")
 
             linux_fx_version = 'DOCKER|'
 
-            if self.container_settings.get('registry_server_url', None) is not None:
+            if self.container_settings.get('registry_server_url'):
                 self.app_settings['DOCKER_REGISTRY_SERVER_URL'] = 'https://' + self.container_settings['registry_server_url']
 
                 linux_fx_version += self.container_settings['registry_server_url'] + '/'
@@ -572,10 +572,10 @@ class AzureRMWebApps(AzureRMModuleBase):
 
             self.site_config['linux_fx_version'] = linux_fx_version
 
-            if self.container_settings.get('registry_server_user', None) is not None:
+            if self.container_settings.get('registry_server_user'):
                 self.app_settings['DOCKER_REGISTRY_SERVER_USERNAME'] = self.container_settings['registry_server_user']
 
-            if self.container_settings.get('registry_server_password', None) is not None:
+            if self.container_settings.get('registry_server_password'):
                 self.app_settings['DOCKER_REGISTRY_SERVER_PASSWORD'] = self.container_settings['registry_server_password']
 
         # set location
@@ -612,7 +612,7 @@ class AzureRMWebApps(AzureRMModuleBase):
 
                 if not old_plan:
                     # no existing service plan, create one
-                    if (self.plan['name'] is None or self.plan['sku'] is None):
+                    if (self.plan.get('name') or self.plan.get('sku')):
                         self.fail('Please specify name, is_linux, sku in plan')
 
                     if 'location' not in self.plan:
@@ -624,12 +624,12 @@ class AzureRMWebApps(AzureRMModuleBase):
                 self.site.server_farm_id = old_plan['id']
 
                 # if linux, setup startup_file
-                if hasattr(old_plan, 'is_linux'):
-                    if hasattr(self, 'startup_file'):
+                if old_plan.get('is_linux'):
+                    if self.startup_file:
                         self.site_config['app_command_line'] = self.startup_file
 
                 # set app setting
-                if self.app_settings is not None:
+                if self.app_settings:
                     app_settings = []
                     for key in self.app_settings.keys():
                         app_settings.append(NameValuePair(key, self.app_settings[key]))
@@ -676,7 +676,7 @@ class AzureRMWebApps(AzureRMModuleBase):
                     to_be_updated = True
                     self.to_do = Actions.UpdateAppSettings
 
-                    if self.app_settings is not None:
+                    if self.app_settings:
                         for key in self.app_settings.keys():
                             self.app_settings_strDic.properties[key] = self.app_settings[key]
 
@@ -714,7 +714,7 @@ class AzureRMWebApps(AzureRMModuleBase):
     # compare existing web app with input, determine weather it's update operation
     def is_updatable_property_changed(self, existing_webapp):
         for property_name in self.updatable_properties:
-            if hasattr(self, property_name) and getattr(self, property_name) != existing_webapp.get(property_name, None):
+            if self.get(property_name) and self.get(property_name) != existing_webapp.get(property_name, None):
                 return True
 
         return False
@@ -722,7 +722,7 @@ class AzureRMWebApps(AzureRMModuleBase):
     # compare xxx_version
     def is_site_config_changed(self, existing_config):
         for fx_version in self.site_config_updatable_properties:
-            if self.site_config.get(fx_version, None) is not None:
+            if self.site_config.get(fx_version):
                 if not getattr(existing_config, fx_version) or \
                         getattr(existing_config, fx_version).upper() != self.site_config.get(fx_version).upper():
                             return True
@@ -731,25 +731,25 @@ class AzureRMWebApps(AzureRMModuleBase):
 
     # comparing existing app setting with input, determine whether it's changed
     def is_app_settings_changed(self):
-        if self.app_settings is not None:
+        if self.app_settings:
             if len(self.app_settings_strDic.properties) != len(self.app_settings):
                 return True
 
-            elif self.app_settings_strDic.properties is not None and len(self.app_settings_strDic.properties) > 0:
+            elif self.app_settings_strDic.properties and len(self.app_settings_strDic.properties) > 0:
                 for key in self.app_settings.keys():
-                    if self.app_settings_strDic.properties.get(key, None) is None \
+                    if self.app_settings_strDic.properties.get(key) \
                             or self.app_settings[key] != self.app_settings_strDic.properties[key]:
                         return True
         return False
 
     # comparing deployment source with input, determine wheather it's changed
     def is_deployment_source_changed(self, existing_webapp):
-        if self.deployment_source is not None:
-            if self.deployment_source.get('url', None) is not None \
+        if self.deployment_source:
+            if self.deployment_source.get('url') \
                     and self.deployment_source['url'] != existing_webapp.get('site_source_control')['url']:
                 return True
 
-            if self.deployment_source.get('branch', None) is not None \
+            if self.deployment_source.get('branch') \
                     and self.deployment_source['branch'] != existing_webapp.get('site_source_control')['branch']:
                 return True
 
