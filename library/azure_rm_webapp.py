@@ -458,7 +458,9 @@ class AzureRMWebApps(AzureRMModuleBase):
             )
         )
 
-        mutually_exclusive = [['windows_framework', 'linux_framework']]
+        mutually_exclusive = [['windows_framework', 'linux_framework'],
+                              ['container_settings', 'linux_framework'],
+                              ['container_settings', 'windows_framework']]
 
         self.resource_group = None
         self.name = None
@@ -558,9 +560,6 @@ class AzureRMWebApps(AzureRMModuleBase):
             self.plan = self.parse_resource_to_dict(self.plan)
 
         if self.container_settings:
-            if self.site_config.get('linux_fx_version'):
-                self.fail("Cannot set linux_framework with container_settings at same time.")
-
             linux_fx_version = 'DOCKER|'
 
             if self.container_settings.get('registry_server_url'):
@@ -612,7 +611,7 @@ class AzureRMWebApps(AzureRMModuleBase):
 
                 if not old_plan:
                     # no existing service plan, create one
-                    if (self.plan.get('name') or self.plan.get('sku')):
+                    if (not self.plan.get('name') or not self.plan.get('sku')):
                         self.fail('Please specify name, is_linux, sku in plan')
 
                     if 'location' not in self.plan:
@@ -714,7 +713,7 @@ class AzureRMWebApps(AzureRMModuleBase):
     # compare existing web app with input, determine weather it's update operation
     def is_updatable_property_changed(self, existing_webapp):
         for property_name in self.updatable_properties:
-            if self.get(property_name) and self.get(property_name) != existing_webapp.get(property_name, None):
+            if hasattr(self, property_name) and getattr(self, property_name) != existing_webapp.get(property_name, None):
                 return True
 
         return False
