@@ -308,6 +308,7 @@ import time
 from ansible.module_utils.azure_rm_common import AzureRMModuleBase
 
 try:
+    from msrestazure.tools import parse_resource_id, resource_id, is_valid_resource_id
     from msrestazure.azure_exceptions import CloudError
     from msrestazure.azure_operation import AzureOperationPoller
     from msrest.serialization import Model
@@ -727,6 +728,17 @@ class AzureRMWebApps(AzureRMModuleBase):
                             return True
 
         return False
+
+    def parse_resource_to_dict(self, resource):
+        '''
+        Return a dict of the give resource, which contains name and resource group.
+
+        :param resource: It can be a resource name, id or a dict contains name and resource group.
+        '''
+        resource_dict = parse_resource_id(resource) if not isinstance(resource, dict) else resource
+        resource_dict['resource_group'] = resource_dict.get('resource_group', self.resource_group)
+        resource_dict['subscription_id'] = resource_dict.get('subscription_id', self.subscription_id)
+        return resource_dict
 
     # comparing existing app setting with input, determine whether it's changed
     def is_app_settings_changed(self):
