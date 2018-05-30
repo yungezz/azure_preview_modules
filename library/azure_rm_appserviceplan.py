@@ -52,11 +52,6 @@ options:
         description:
             - Describe number of workers to be allocated.
 
-    admin_site_name:
-        description:
-            - The name of the admin web app.
-            - Only used in update operation.
-
     state:
       description:
         - Assert the state of the app service plan.
@@ -76,107 +71,61 @@ author:
 '''
 
 EXAMPLES = '''
-    - name: Create a windows web app with non-exist app service plan
-      azure_rm_webapp:
-        resource_group: myresourcegroup
-        name: mywinwebapp
-        plan:
-          resource_group: myappserviceplan_rg
-          name: myappserviceplan
-          is_linux: false
-          sku: S1
+    - name: Create a windows app service plan
+      azure_rm_appserviceplan:
+        name: "{{ win_plan_name }}1"
+        resource_group: "{{ plan_resource_group }}"
+        location: "{{ location }}"
+        sku: S1
 
-    - name: Create a docker web app with some app settings, with docker image
-      azure_rm_webapp:
-        resource_group: myresourcegroup
-        name: mydockerwebapp
-        plan:
-          resource_group: appserviceplan_test
-          name: myappplan
-          is_linux: true
-          sku: S1
-          number_of_workers: 2
-        app_settings:
-          testkey: testvalue
-          testkey2: testvalue2
-        container_settings:
-          name: ansible/ansible:ubuntu1404
+    - name: Create a linux app service plan
+      azure_rm_appserviceplan:
+        resource_group: "{{ linux_plan_resource_group }}"
+        name: "{{ linux_plan_name }}1"
+        location: "{{ location }}"
+        sku: S1
+        is_linux: true
+        number_of_workers: 1
 
-    - name: Create a docker web app with private acr registry
-      azure_rm_webapp:
-        resource_group: myresourcegroup
-        name: mydockerwebapp
-        plan: myappplan
-        app_settings:
-          testkey: testvalue
-        container_settings:
-          name: ansible/ubuntu1404
-          registry_server_url: myregistry.io
-          registry_server_user: user
-          registry_server_password: pass
-
-    - name: Create a linux web app with Node 6.6 framework
-      azure_rm_webapp:
-        resource_group: myresourcegroup
-        name: mylinuxwebapp
-        plan:
-          resource_group: appserviceplan_test
-          name: myappplan
-        app_settings:
-          testkey: testvalue
-        linux_framework:
-          name: node
-          version: 6.6
+    - name: update sku of existing windows app service plan
+      azure_rm_appserviceplan:
+        name: "{{ win_plan_name }}1"
+        resource_group: "{{ plan_resource_group }}"
+        location: "{{ location }}"
+        sku: S2
 '''
 
 RETURN = '''
-azure_webapp:
-    description: Facts about the current state of the web app.
+azure_appserviceplan:
+    description: Facts about the current state of the app service plan
     returned: always
     type: dict
     sample: {
-        "availability_state": "Normal",
-        "client_affinity_enabled": true,
-        "client_cert_enabled": false,
-        "container_size": 0,
-        "daily_memory_time_quota": 0,
-        "default_host_name": "ansiblewindowsaaa.azurewebsites.net",
-        "enabled": true,
-        "enabled_host_names": [
-            "ansiblewindowsaaa.azurewebsites.net",
-            "ansiblewindowsaaa.scm.azurewebsites.net"
-        ],
-        "host_name_ssl_states": [
-            {
-                "host_type": "Standard",
-                "name": "ansiblewindowsaaa.azurewebsites.net",
-                "ssl_state": "Disabled"
+            "app_service_plan_name": "win_appplan11",
+            "geo_region": "East US",
+            "id": "/subscriptions/<subs_id>/resourceGroups/ansiblewebapp1_plan/providers/Microsoft.Web/serverfarms/win_appplan11",
+            "kind": "app",
+            "location": "East US",
+            "maximum_number_of_workers": 10,
+            "name": "win_appplan11",
+            "number_of_sites": 0,
+            "per_site_scaling": false,
+            "provisioning_state": "Succeeded",
+            "reserved": false,
+            "resource_group": "ansiblewebapp1_plan",
+            "sku": {
+                "capacity": 1,
+                "family": "S",
+                "name": "S1",
+                "size": "S1",
+                "tier": "Standard"
             },
-            {
-                "host_type": "Repository",
-                "name": "ansiblewindowsaaa.scm.azurewebsites.net",
-                "ssl_state": "Disabled"
-            }
-        ],
-        "host_names": [
-            "ansiblewindowsaaa.azurewebsites.net"
-        ],
-        "host_names_disabled": false,
-        "id": "/subscriptions/<subscription_id>/resourceGroups/ansiblewebapp1/providers/Microsoft.Web/sites/ansiblewindowsaaa",
-        "kind": "app",
-        "last_modified_time_utc": "2018-05-14T04:50:54.473333Z",
-        "location": "East US",
-        "name": "ansiblewindowsaaa",
-        "outbound_ip_addresses": "52.170.7.25,52.168.75.147,52.179.5.98,52.179.1.81,52.179.4.232",
-        "repository_site_name": "ansiblewindowsaaa",
-        "reserved": false,
-        "resource_group": "ansiblewebapp1",
-        "scm_site_also_stopped": false,
-        "server_farm_id": "/subscriptions/<subscription_id>/resourceGroups/test/providers/Microsoft.Web/serverfarms/plan1",
-        "state": "Running",
-        "tags": {},
-        "type": "Microsoft.Web/sites",
-        "usage_state": "Normal"
+            "status": "Ready",
+            "subscription": "xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxxxxxxx",
+            "tags": {},
+            "target_worker_count": 0,
+            "target_worker_size_id": 0,
+            "type": "Microsoft.Web/serverfarms"
     }
 '''
 
@@ -188,7 +137,7 @@ try:
     from msrestazure.azure_operation import AzureOperationPoller
     from msrest.serialization import Model
     from azure.mgmt.web.models import (
-        app_service_plan, AppServicePlan, SkuDescription, NameValuePair
+        app_service_plan, AppServicePlan, SkuDescription
     )
 except ImportError:
     # This is handled in azure_rm_common
@@ -250,9 +199,6 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
             number_of_workers=dict(
                 type='str'
             ),
-            admin_site_name=dict(
-                type='str'
-            ),
             state=dict(
                 type='str',
                 default='present',
@@ -267,7 +213,6 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
         self.sku = None
         self.is_linux = None
         self.number_of_workers = 1
-        self.admin_site_name = None
 
         self.results = dict(
             changed=False,
@@ -309,7 +254,7 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
                     self.fail('Please specify sku in plan when creation')
 
         else:
-            # existing web app, do update
+            # existing app service plan, do update
             self.log("App Service Plan already exists")
 
             if self.state == 'present':
@@ -329,13 +274,9 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
                 if self.number_of_workers and int(self.number_of_workers) != old_response['sku']['capacity']:
                     to_be_updated = True
 
-                # check if admin_site_name changed
-                if self.admin_site_name:
-                    to_be_updated = True
-
                 if self.is_linux and self.is_linux != old_response['reserved']:
                     self.fail("Operation not allowed: cannot update is_linux of app service plan.")
-            
+
         if old_response:
             self.results['ansible_facts']['azure_appserviceplan'] = old_response
 
@@ -350,15 +291,15 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
             self.results['ansible_facts']['azure_appserviceplan'] = response
 
         if self.state == 'absent' and old_response:
-            self.log("Delete Web App instance")
+            self.log("Delete app service plan")
             self.results['changed'] = True
 
             if self.check_mode:
                 return self.results
 
-            self.delete_webapp()
+            self.delete_plan()
 
-            self.log('Web App instance deleted')
+            self.log('App service plan instance deleted')
 
         return self.results
 
@@ -396,9 +337,6 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
             plan_def = AppServicePlan(
                 location=self.location, app_service_plan_name=self.name, sku=sku_def, reserved=self.is_linux)
 
-            if self.admin_site_name:
-                plan_def.admin_site_name = self.admin_site_name
-
             poller = self.web_client.app_service_plans.create_or_update(self.resource_group, self.name, plan_def)
 
             if isinstance(poller, AzureOperationPoller):
@@ -410,7 +348,22 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
         except CloudError as ex:
             self.fail("Failed to create app service plan {0} in resource group {1}: {2}".format(self.name, self.resource_group, str(ex)))
 
+    def delete_plan(self):
+        '''
+        Deletes specified App service plan in the specified subscription and resource group.
 
+        :return: True
+        '''
+        self.log("Deleting the App service plan {0}".format(self.name))
+        try:
+            response = self.web_client.app_service_plans.delete(resource_group_name=self.resource_group,
+                                                       name=self.name)
+        except CloudError as e:
+            self.log('Error attempting to delete App service plan.')
+            self.fail(
+                "Error deleting the App service plan : {0}".format(str(e)))
+
+        return True
 
 def main():
     """Main execution"""
