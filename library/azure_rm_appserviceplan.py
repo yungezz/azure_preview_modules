@@ -266,7 +266,7 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
 
         self.sku = None
         self.is_linux = None
-        self.number_of_workers = None
+        self.number_of_workers = 1
         self.admin_site_name = None
 
         self.results = dict(
@@ -296,7 +296,7 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
             self.location = resource_group.location
 
         # get app service plan
-        old_response = self.get_app_service_plan()
+        old_response = self.get_plan()
 
         # if not existing
         if not old_response:
@@ -322,18 +322,18 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
                     to_be_updated = True
 
                 # check if sku changed
-                if self.sku and get_sku_name(_normalize_sku(self.sku)) != old_response.sku:
+                if self.sku and _normalize_sku(self.sku) != old_response['sku']['size']:
                     to_be_updated = True
 
                 # check if number_of_workers changed
-                if self.number_of_workers and self.number_of_workers != old_response.number_of_workers:
+                if self.number_of_workers and int(self.number_of_workers) != old_response['sku']['capacity']:
                     to_be_updated = True
 
                 # check if admin_site_name changed
-                if self.admin_site_name and self.admin_site_name != old_response.admin_site_name:
+                if self.admin_site_name:
                     to_be_updated = True
-\
-                if self.is_linux and self.is_linux != old_response.reserved:
+
+                if self.is_linux and self.is_linux != old_response['reserved']:
                     self.fail("Operation not allowed: cannot update is_linux of app service plan.")
             
         if old_response:
@@ -392,9 +392,9 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
             sku = _normalize_sku(self.sku)
 
             sku_def = SkuDescription(tier=get_sku_name(
-                sku), name=sku, capacity=(self.get('number_of_workers', None)))
+                sku), name=sku, capacity=self.number_of_workers)
             plan_def = AppServicePlan(
-                location=self.location, app_service_plan_name=self.name, sku=sku_def, reserved=(self.is_linux, None)))
+                location=self.location, app_service_plan_name=self.name, sku=sku_def, reserved=self.is_linux)
 
             if self.admin_site_name:
                 plan_def.admin_site_name = self.admin_site_name
@@ -414,7 +414,7 @@ class AzureRMAppServicePlans(AzureRMModuleBase):
 
 def main():
     """Main execution"""
-    AzureRMWebApps()
+    AzureRMAppServicePlans()
 
 
 if __name__ == '__main__':
