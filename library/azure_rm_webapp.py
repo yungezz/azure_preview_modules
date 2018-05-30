@@ -661,7 +661,7 @@ class AzureRMWebApps(AzureRMModuleBase):
                     self.to_do = Actions.CreateOrUpdate
 
                 # check if linux_fx_version changed
-                if old_config.linux_fx_version != self.site_config.get('linux_fx_version', None):
+                if old_config.linux_fx_version != self.site_config.get('linux_fx_version', ''):
                     to_be_updated = True
                     self.to_do = Actions.CreateOrUpdate
 
@@ -748,7 +748,7 @@ class AzureRMWebApps(AzureRMModuleBase):
 
             elif self.app_settings_strDic.properties and len(self.app_settings_strDic.properties) > 0:
                 for key in self.app_settings.keys():
-                    if self.app_settings_strDic.properties.get(key) \
+                    if not self.app_settings_strDic.properties.get(key) \
                             or self.app_settings[key] != self.app_settings_strDic.properties[key]:
                         return True
         return False
