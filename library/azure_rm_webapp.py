@@ -366,7 +366,7 @@ class AzureRMWebApps(AzureRMModuleBase):
                 type='raw'
             ),
             frameworks=dict(
-                type='dict'
+                type='list'
             ),
             java_settings=dict(
                 type='dict',
@@ -519,7 +519,7 @@ class AzureRMWebApps(AzureRMModuleBase):
         is_linux = False
         old_plan = self.get_app_service_plan()
         if old_plan:
-            is_linux = old_plan.reserved
+            is_linux = old_plan['reserved']
         else:
             is_linux = self.plan['is_linux'] if self.plan['is_linux'] else False
         
@@ -533,11 +533,11 @@ class AzureRMWebApps(AzureRMModuleBase):
 
                 self.site_config['linux_fx_version'] = (self.frameworks[0]['name'] + '|' + self.frameworks[0]['version']).upper()
             else:
-                for name in list(self.frameworks.keys()):
-                    if name not in self.supported_windows_frameworks:
-                        self.fail('Unsupported framework {0} for Windows web app.'.format(name))
+                for fx in self.frameworks:
+                    if fx.get('name') not in self.supported_windows_frameworks:
+                        self.fail('Unsupported framework {0} for Windows web app.'.format(fx.get('name')))
                     else:
-                        self.site_config[name + '_version'] = self.frameworks[name]
+                        self.site_config[fx.get('name') + '_version'] = fx.get('version')
 
         if self.java_settings:
             if is_linux:
@@ -664,11 +664,17 @@ class AzureRMWebApps(AzureRMModuleBase):
                 self.app_settings_strDic = self.list_app_settings()
 
                 # purge existing app_settings:
-                if self.purge_app_settings:
-                    self.app_settings_strDic.properties = dict()
+                if self.purge_app_settings: 
+                    if self.app_settings_strDic.properties == self.app_settings:
+                        for key in self.app_settings.keys():
+                            if self.app_settings[key] != self.app_settings_strDic.properties.get(key, None):
+                                to_be_updated = True
+                                self.app_settings_strDic.properties = dict()
+                                self.app_settings_strDic.properties[key]  = self.app_settings[key]
+                                break
 
                 # check if app settings changed
-                if self.purge_app_settings or self.is_app_settings_changed():
+                if self.is_app_settings_changed():
                     to_be_updated = True
                     self.to_do = Actions.UpdateAppSettings
 
