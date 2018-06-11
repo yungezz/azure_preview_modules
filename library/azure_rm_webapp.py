@@ -49,7 +49,7 @@ options:
               number_of_workers. Number of workers.
 
     java_settings:
-        description: Java framework and container settings.
+        description: Java framework and container settings. Mutually exclusive with frameworks.
         suboptions:
             version:
                 description: Java version. e.g., 1.8, 1.9.
@@ -60,16 +60,16 @@ options:
 
     frameworks:
         description:
-            - Set of run time framework settings.
+            - Set of run time framework settings. Each setting is a dictionary.
             - Mutually exlusive with java_settings.
             - See https://docs.microsoft.com/en-us/azure/app-service/app-service-web-overview for more info.
         suboptions:
             name:
                 description:
                     - Name of the framework.
-                    - Supported framework list for Windows web app and Linux web app are different.
-                    - For Windows web app, supported names(June 2018): net_framework, php, python, node. Multiple framework can be set at same time.
-                    - For Linux web app, supported names(June 2018): ruby, php, dotnetcore, node. Only one framework can be set.
+                    - Supported framework list for Windows web app and Linux web app is different.
+                    - For Windows web app, supported names(June 2018) net_framework, php, python, node. Multiple framework can be set at same time.
+                    - For Linux web app, supported names(June 2018) ruby, php, dotnetcore, node. Only one framework can be set.
                 choices:
                     - net_framework
                     - php
@@ -80,18 +80,18 @@ options:
             version:
                 description:
                     - Version of the framework. For linux web app supported value, see https://aka.ms/linux-stacks for more info.
-                    - net_framework: 'v4.0' for .NET 4.6 and 'v3.0' for .NET 3.5
-                    - php: e.g., 5.5, 5.6, 7.0.
-                    - python: e.g., 5.5, 5.6, 7.0.
-                    - node: e.g., 6.6, 6.9.
-                    - dotnetcore: e.g., 1.0, 1,1, 1.2.
-                    - ruby: 2.3.
+                    - net_framework supported value sample, 'v4.0' for .NET 4.6 and 'v3.0' for .NET 3.5.
+                    - php supported value sample, 5.5, 5.6, 7.0.
+                    - python supported value sample, e.g., 5.5, 5.6, 7.0.
+                    - node supported value sample, 6.6, 6.9.
+                    - dotnetcore supported value sample, 1.0, 1,1, 1.2.
+                    - ruby supported value sample, 2.3.
 
     container_settings:
         description: Web app container settings.
         suboptions:
             name:
-                description: Name of container. eg. imagename:tag
+                description: Name of container. eg. "imagename:tag"
             registry_server_url:
                 description: Container registry server url. eg. mydockerregistry.io
             registry_server_user:
@@ -222,9 +222,24 @@ EXAMPLES = '''
           name: myappplan
         app_settings:
           testkey: testvalue
-        linux_framework:
-          name: node
-          version: 6.6
+        frameworks:
+          - name: "node"
+            version: "6.6"
+
+    - name: Create a windows web app with node, php
+      azure_rm_webapp:
+        resource_group: myresourcegroup
+        name: mywinwebapp
+        plan:
+          resource_group: appserviceplan_test
+          name: myappplan
+        app_settings:
+          testkey: testvalue
+        frameworks:
+          - name: "node"
+            version: 6.6
+          - name: "php"
+            version: "7.0"
 '''
 
 RETURN = '''
@@ -493,116 +508,103 @@ class AzureRMWebApps(AzureRMModuleBase):
                 if key == "scm_type":
                     self.site_config[key] = kwargs[key]
 
-                # # azure sdk linux_fx_version:
-                # # for docker web app, value is like DOCKER|imagename:tag
-                # # for linux web app, value is like NODE|6.6
-                # if key == "linux_framework":
-                #     self.site_config['linux_fx_version'] = (kwargs[key]['name'] + '|' + kwargs[key]['version']).upper()
-
-                # if key == "java_settings":
-                #     if 'name' in kwargs['java_container_settings']:
-                #         self.site_config['java_container'] = kwargs['java_container_settings']['name']
-                #     if 'version' in kwargs['java_container_settings']:
-                #         self.site_config['java_container_version'] = kwargs['java_container_settings']['version']                
-
         old_response = None
         response = None
         to_be_updated = False
-
-        # if self.windows_framework:
-        #     if self.windows_framework.get('java_version') and len(self.windows_framework) > 1:
-        #         self.fail('java_version is mutually exclusive with other framework version in windows_framework.')
-        #     for key in list(self.windows_framework.keys()):
-        #         self.site_config[key] = self.windows_framework[key]
-
-        # get app service plan
-        is_linux = False
-        old_plan = self.get_app_service_plan()
-        if old_plan:
-            is_linux = old_plan['reserved']
-        else:
-            is_linux = self.plan['is_linux'] if self.plan['is_linux'] else False
-        
-        if self.frameworks:
-            if is_linux:
-                if len(self.frameworks) != 1:
-                    self.fail('Can specify one framework only for Linux web app.')
-
-                if self.frameworks[0]['name'] not in self.supported_linux_frameworks:
-                    self.fail('Unsupported framework {0} for Linux web app.'.format(self.frameworks[0]['name']))
-
-                self.site_config['linux_fx_version'] = (self.frameworks[0]['name'] + '|' + self.frameworks[0]['version']).upper()
-            else:
-                for fx in self.frameworks:
-                    if fx.get('name') not in self.supported_windows_frameworks:
-                        self.fail('Unsupported framework {0} for Windows web app.'.format(fx.get('name')))
-                    else:
-                        self.site_config[fx.get('name') + '_version'] = fx.get('version')
-
-        if self.java_settings:
-            if is_linux:
-                self.site_config['linux_fx_version'] = ("java|" + self.java_settings['version']).upper()
-            else:
-                self.site_config['java_version'] = self.java_settings['version']
-
-            self.site_config['java_container'] = self.java_settings['java_container_name']
-            self.site_config['java_container_version'] = self.java_settings['java_container_version']
-
-        if not self.app_settings:
-            self.app_settings = dict()
-
-        if self.plan:
-            self.plan = self.parse_resource_to_dict(self.plan)
-
-        if self.container_settings:
-            linux_fx_version = 'DOCKER|'
-
-            if self.container_settings.get('registry_server_url'):
-                self.app_settings['DOCKER_REGISTRY_SERVER_URL'] = 'https://' + self.container_settings['registry_server_url']
-
-                linux_fx_version += self.container_settings['registry_server_url'] + '/'
-
-            linux_fx_version += self.container_settings['name']
-
-            self.site_config['linux_fx_version'] = linux_fx_version
-
-            if self.container_settings.get('registry_server_user'):
-                self.app_settings['DOCKER_REGISTRY_SERVER_USERNAME'] = self.container_settings['registry_server_user']
-
-            if self.container_settings.get('registry_server_password'):
-                self.app_settings['DOCKER_REGISTRY_SERVER_PASSWORD'] = self.container_settings['registry_server_password']
 
         # set location
         resource_group = self.get_resource_group(self.resource_group)
         if not self.location:
             self.location = resource_group.location
 
-        # init site
-        self.site = Site(location=self.location, site_config=self.site_config)
-
-        if self.https_only is not None:
-            self.site.https_only = self.https_only
-
-        if self.client_affinity_enabled:
-            self.site.client_affinity_enabled = self.client_affinity_enabled
-
         # get existing web app
         old_response = self.get_webapp()
 
-        # check if the web app already present in the resource group
-        if not old_response:
-            self.log("Web App instance doesn't exist")
+        if old_response:
+            self.results['ansible_facts']['azure_webapp'] = old_response
 
-            if self.state == "present":
+        if self.state == 'present':
+            if not self.plan and not old_response:
+                self.fail("Please specify plan for newly created web app.")
+
+            if not self.plan:
+                self.plan = old_response['server_farm_id']
+
+            self.plan = self.parse_resource_to_dict(self.plan)
+
+            # get app service plan
+            is_linux = False
+            old_plan = self.get_app_service_plan()
+            if old_plan:
+                is_linux = old_plan['reserved']
+            else:
+                is_linux = self.plan['is_linux'] if self.plan['is_linux'] else False
+
+            if self.frameworks:
+                if is_linux:
+                    if len(self.frameworks) != 1:
+                        self.fail('Can specify one framework only for Linux web app.')
+
+                    if self.frameworks[0]['name'] not in self.supported_linux_frameworks:
+                        self.fail('Unsupported framework {0} for Linux web app.'.format(self.frameworks[0]['name']))
+
+                    self.site_config['linux_fx_version'] = (self.frameworks[0]['name'] + '|' + self.frameworks[0]['version']).upper()
+                else:
+                    for fx in self.frameworks:
+                        if fx.get('name') not in self.supported_windows_frameworks:
+                            self.fail('Unsupported framework {0} for Windows web app.'.format(fx.get('name')))
+                        else:
+                            self.site_config[fx.get('name') + '_version'] = fx.get('version')
+
+            if self.java_settings:
+                if is_linux:
+                    self.site_config['linux_fx_version'] = ("java|" + self.java_settings['version']).upper()
+                else:
+                    self.site_config['java_version'] = self.java_settings['version']
+
+                self.site_config['java_container'] = self.java_settings['java_container_name']
+                self.site_config['java_container_version'] = self.java_settings['java_container_version']
+
+            if not self.app_settings:
+                self.app_settings = dict()
+
+            if self.container_settings:
+                linux_fx_version = 'DOCKER|'
+
+                if self.container_settings.get('registry_server_url'):
+                    self.app_settings['DOCKER_REGISTRY_SERVER_URL'] = 'https://' + self.container_settings['registry_server_url']
+
+                    linux_fx_version += self.container_settings['registry_server_url'] + '/'
+
+                linux_fx_version += self.container_settings['name']
+
+                self.site_config['linux_fx_version'] = linux_fx_version
+
+                if self.container_settings.get('registry_server_user'):
+                    self.app_settings['DOCKER_REGISTRY_SERVER_USERNAME'] = self.container_settings['registry_server_user']
+
+                if self.container_settings.get('registry_server_password'):
+                    self.app_settings['DOCKER_REGISTRY_SERVER_PASSWORD'] = self.container_settings['registry_server_password']
+
+            # init site
+            self.site = Site(location=self.location, site_config=self.site_config)
+
+            if self.https_only is not None:
+                self.site.https_only = self.https_only
+
+            if self.client_affinity_enabled:
+                self.site.client_affinity_enabled = self.client_affinity_enabled
+
+            # check if the web app already present in the resource group
+            if not old_response:
+                self.log("Web App instance doesn't exist")
+
                 to_be_updated = True
                 self.to_do = Actions.CreateOrUpdate
 
                 # service plan is required for creation
                 if not self.plan:
                     self.fail("Please specify app service plan in plan parameter.")
-
-                # get app service plan
-                old_plan = self.get_app_service_plan()
 
                 if not old_plan:
                     # no existing service plan, create one
@@ -622,8 +624,6 @@ class AzureRMWebApps(AzureRMModuleBase):
                     if self.startup_file:
                         self.site_config['app_command_line'] = self.startup_file
 
-                # check if is_linux
-
                 # set app setting
                 if self.app_settings:
                     app_settings = []
@@ -631,15 +631,13 @@ class AzureRMWebApps(AzureRMModuleBase):
                         app_settings.append(NameValuePair(key, self.app_settings[key]))
 
                     self.site_config['app_settings'] = app_settings
-        else:
-            # existing web app, do update
-            self.log("Web App instance already exists")
+            else:
+                # existing web app, do update
+                self.log("Web App instance already exists")
 
-            if self.state == 'present':
                 self.log('Result: {0}'.format(old_response))
 
-                update_tags, old_response['tags'] = self.update_tags(
-                    old_response.get('tags', dict()))
+                update_tags, old_response['tags'] = self.update_tags(old_response.get('tags', dict()))
 
                 if update_tags:
                     to_be_updated = True
@@ -664,17 +662,12 @@ class AzureRMWebApps(AzureRMModuleBase):
                 self.app_settings_strDic = self.list_app_settings()
 
                 # purge existing app_settings:
-                if self.purge_app_settings: 
-                    if self.app_settings_strDic.properties == self.app_settings:
-                        for key in self.app_settings.keys():
-                            if self.app_settings[key] != self.app_settings_strDic.properties.get(key, None):
-                                to_be_updated = True
-                                self.app_settings_strDic.properties = dict()
-                                self.app_settings_strDic.properties[key]  = self.app_settings[key]
-                                break
+                if self.purge_app_settings:
+                    to_be_updated = True
+                    self.app_settings_strDic.properties = dict()
 
                 # check if app settings changed
-                if self.is_app_settings_changed():
+                if self.purge_app_settings or self.is_app_settings_changed():
                     to_be_updated = True
                     self.to_do = Actions.UpdateAppSettings
 
@@ -682,8 +675,20 @@ class AzureRMWebApps(AzureRMModuleBase):
                         for key in self.app_settings.keys():
                             self.app_settings_strDic.properties[key] = self.app_settings[key]
 
-        if old_response:
-            self.results['ansible_facts']['azure_webapp'] = old_response
+        elif self.state == 'absent':
+            if old_response:
+                self.log("Delete Web App instance")
+                self.results['changed'] = True
+
+                if self.check_mode:
+                    return self.results
+
+                self.delete_webapp()
+
+                self.log('Web App instance deleted')
+
+            else:
+                self.fail("Web app {0} not exists.".format(self.name))
 
         if to_be_updated:
             self.log('Need to Create/Update web app')
@@ -699,17 +704,6 @@ class AzureRMWebApps(AzureRMModuleBase):
             if self.to_do == Actions.UpdateAppSettings:
                 response = self.update_app_settings()
                 self.results['ansible_facts']['azure_webapp']['app_settings'] = response
-
-        if self.state == 'absent' and old_response:
-            self.log("Delete Web App instance")
-            self.results['changed'] = True
-
-            if self.check_mode:
-                return self.results
-
-            self.delete_webapp()
-
-            self.log('Web App instance deleted')
 
         return self.results
 
