@@ -84,7 +84,7 @@ options:
                     name:
                         description: Name of the setting.
                         choices:
-                            - java_container_name
+                            - java_container
                             - java_container_version
                     value:
                         description: Value of the settings.
@@ -480,8 +480,8 @@ class AzureRMWebApps(AzureRMModuleBase):
                                      "skip_custom_domain_verification",
                                      "ttl_in_seconds"]
 
-        self.supported_linux_frameworks = ['ruby', 'php', 'dotnetcore', 'node']
-        self.supported_windows_frameworks = ['net_framework', 'php', 'python', 'node']
+        self.supported_linux_frameworks = ['ruby', 'php', 'dotnetcore', 'node', 'java']
+        self.supported_windows_frameworks = ['net_framework', 'php', 'python', 'node', 'java']
 
         super(AzureRMWebApps, self).__init__(derived_arg_spec=self.module_arg_spec,
                                              mutually_exclusive=mutually_exclusive,
@@ -528,7 +528,7 @@ class AzureRMWebApps(AzureRMModuleBase):
             if old_plan:
                 is_linux = old_plan['reserved']
             else:
-                is_linux = self.plan['is_linux'] if self.plan['is_linux'] else False
+                is_linux = self.plan['is_linux'] if 'is_linux' in self.plan else False
 
             if self.frameworks:
                 # java is mutually exclusive with other frameworks
@@ -551,9 +551,9 @@ class AzureRMWebApps(AzureRMModuleBase):
                             self.site_config[fx.get('name') + '_version'] = fx.get('version')
                 
                 for fx in self.frameworks:
-                    if fx.settings:
-                        for setting in fx.settings:
-                            self.site_config[settings['name']] == settings['value']
+                    if fx['settings']:
+                        for setting in fx['settings']:
+                            self.site_config[setting['name']] = setting['value']
 
             if not self.app_settings:
                 self.app_settings = dict()
