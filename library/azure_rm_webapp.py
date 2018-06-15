@@ -42,35 +42,26 @@ options:
             - "It can be resource id of existing app service plan. eg.,
               /subscriptions/<subs_id>/resourceGroups/<resource_group>/providers/Microsoft.Web/serverFarms/<plan_name>"
             - It can be a dict which contains C(name), C(resource_group), C(sku), C(is_linux) and C(number_of_workers).
-              name.  Name of app service plan.
+              name. Name of app service plan.
               resource_group. Resource group name of app service plan.
               sku. SKU of app service plan. For allowed sku, please refer to https://azure.microsoft.com/en-us/pricing/details/app-service/linux/.
               is_linux. Indicate is linux app service plan. type bool. default False.
               number_of_workers. Number of workers.
 
-    java_settings:
-        description: Java framework and container settings. Mutually exclusive with frameworks.
-        suboptions:
-            version:
-                description: Java version. e.g., 1.8, 1.9.
-            java_container_name:
-                description: The java container, e.g., Tomcat, Jetty. For Linux web app, only supports Tomcat currently.
-            java_container_version:
-                description: The version of the java container. e.g., '8.0.23' for Tomcat.
-
     frameworks:
         description:
             - Set of run time framework settings. Each setting is a dictionary.
-            - Mutually exlusive with java_settings.
             - See https://docs.microsoft.com/en-us/azure/app-service/app-service-web-overview for more info.
         suboptions:
             name:
                 description:
                     - Name of the framework.
                     - Supported framework list for Windows web app and Linux web app is different.
-                    - For Windows web app, supported names(June 2018) net_framework, php, python, node. Multiple framework can be set at same time.
-                    - For Linux web app, supported names(June 2018) ruby, php, dotnetcore, node. Only one framework can be set.
+                    - For Windows web app, supported names(June 2018) java, net_framework, php, python, node. Multiple framework can be set at same time.
+                    - For Linux web app, supported names(June 2018) java, ruby, php, dotnetcore, node. Only one framework can be set.
+                    - Java framework is mutually exclusive with others.
                 choices:
+                    - java
                     - net_framework
                     - php
                     - python
@@ -86,6 +77,17 @@ options:
                     - node supported value sample, 6.6, 6.9.
                     - dotnetcore supported value sample, 1.0, 1,1, 1.2.
                     - ruby supported value sample, 2.3.
+            settings:
+                description:
+                    - List of settings of the framework.
+                suboptions:
+                    name:
+                        description: Name of the setting.
+                        choices:
+                            - java_container_name
+                            - java_container_version
+                    value:
+                        description: Value of the settings.
 
     container_settings:
         description: Web app container settings.
@@ -315,12 +317,6 @@ container_settings_spec = dict(
     registry_server_password=dict(type='str')
 )
 
-java_settings_spec = dict(
-    version=dict(type='str', required=True),
-    java_container_name=dict(type='str', required=True),
-    java_container_version=dict(type='str', required=True)
-)
-
 deployment_source_spec = dict(
     url=dict(type='str'),
     branch=dict(type='str')
@@ -383,10 +379,6 @@ class AzureRMWebApps(AzureRMModuleBase):
             frameworks=dict(
                 type='list'
             ),
-            java_settings=dict(
-                type='dict',
-                options=java_settings_spec
-            ),
             container_settings=dict(
                 type='dict',
                 options=container_settings_spec
@@ -431,8 +423,7 @@ class AzureRMWebApps(AzureRMModuleBase):
             )
         )
 
-        mutually_exclusive = [['frameworks', 'java_settings'],
-                              ['container_settings', 'frameworks']]
+        mutually_exclusive = [['container_settings', 'frameworks']]
 
         self.resource_group = None
         self.name = None
@@ -474,7 +465,6 @@ class AzureRMWebApps(AzureRMModuleBase):
         self.to_do = Actions.NoAction
 
         self.frameworks = None
-        self.java_settings = None
 
         # set site_config value from kwargs
         self.site_config_updatable_properties = ["net_framework_version",
@@ -541,6 +531,10 @@ class AzureRMWebApps(AzureRMModuleBase):
                 is_linux = self.plan['is_linux'] if self.plan['is_linux'] else False
 
             if self.frameworks:
+                # java is mutually exclusive with other frameworks
+                if len(self.frameworks) > 1 and any(f['name'] == 'java' for f in self.frameworks):
+                    self.fail('Java is mutually exclusive with other frameworks.')
+
                 if is_linux:
                     if len(self.frameworks) != 1:
                         self.fail('Can specify one framework only for Linux web app.')
@@ -555,15 +549,11 @@ class AzureRMWebApps(AzureRMModuleBase):
                             self.fail('Unsupported framework {0} for Windows web app.'.format(fx.get('name')))
                         else:
                             self.site_config[fx.get('name') + '_version'] = fx.get('version')
-
-            if self.java_settings:
-                if is_linux:
-                    self.site_config['linux_fx_version'] = ("java|" + self.java_settings['version']).upper()
-                else:
-                    self.site_config['java_version'] = self.java_settings['version']
-
-                self.site_config['java_container'] = self.java_settings['java_container_name']
-                self.site_config['java_container_version'] = self.java_settings['java_container_version']
+                
+                for fx in self.frameworks:
+                    if fx.settings:
+                        for setting in fx.settings:
+                            self.site_config[settings['name']] == settings['value']
 
             if not self.app_settings:
                 self.app_settings = dict()
